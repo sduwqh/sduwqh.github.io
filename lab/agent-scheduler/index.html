@@ -16,15 +16,18 @@
         <p>你只想打游戏。导师任务交给 Agent，电脑资源和可疑程度由你兜底。</p>
       </div>
       <div class="top-actions">
-        <button id="pauseBtn" type="button">暂停</button>
+        <button class="speed-btn" data-speed="0" type="button">计划暂停</button>
+        <button class="speed-btn" data-speed="1" type="button">1x</button>
+        <button class="speed-btn" data-speed="2" type="button">2x</button>
+        <button class="speed-btn" data-speed="4" type="button">4x</button>
         <button id="restartBtn" type="button">重开</button>
       </div>
     </header>
 
     <section class="status-strip" aria-label="核心状态">
       <div class="metric">
-        <span>第 <b id="dayText">1</b> 天</span>
-        <strong id="clockText">60s</strong>
+        <span>第 <b id="dayText">1</b> 晚</span>
+        <strong id="clockText">18:00</strong>
       </div>
       <div class="metric">
         <span>游戏爽度</span>
@@ -41,6 +44,25 @@
       <div class="metric">
         <span>精力</span>
         <strong id="focusText">80</strong>
+      </div>
+    </section>
+
+    <section class="panel guide-panel">
+      <div>
+        <div class="panel-head compact">
+          <h2>新手指引</h2>
+          <span>可以先暂停规划，不会扣时间</span>
+        </div>
+        <ol class="guide-steps">
+          <li>先点一个导师任务。</li>
+          <li>根据任务类型分配合适的 Agent。</li>
+          <li>开低画质或高画质摸鱼，观察资源压力。</li>
+          <li>草稿完成后检查、润色，再提交。</li>
+        </ol>
+      </div>
+      <div class="coach-card">
+        <span>当前建议</span>
+        <strong id="coachText">先选一个任务，再分配 Agent。</strong>
       </div>
     </section>
 
@@ -87,6 +109,7 @@
           <h2>操作台</h2>
           <span id="selectedTaskText">未选择任务</span>
         </div>
+        <div id="selectedDetails" class="selected-details"></div>
         <div class="ops-grid">
           <button data-action="assign-fast" type="button">速通 Agent</button>
           <button data-action="assign-stable" type="button">稳健 Agent</button>
@@ -132,6 +155,7 @@
         <button id="closeResultBtn" type="button">再来一局</button>
       </div>
     </div>
+    <div id="toastHost" class="toast-host" aria-live="polite"></div>
   </main>
   <script src="./game.js"></script>
 </body>
