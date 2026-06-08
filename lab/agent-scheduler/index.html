@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>摸鱼调度器：Agent Deadline Simulator</title>
+  <link rel="icon" href="/img/favicon.svg">
+  <link rel="stylesheet" href="./game.css">
+</head>
+<body>
+  <main class="sim-shell">
+    <header class="topbar">
+      <div>
+        <a class="back-link" href="/lab/">Lab</a>
+        <h1>摸鱼调度器</h1>
+        <p>你只想打游戏。导师任务交给 Agent，电脑资源和可疑程度由你兜底。</p>
+      </div>
+      <div class="top-actions">
+        <button id="pauseBtn" type="button">暂停</button>
+        <button id="restartBtn" type="button">重开</button>
+      </div>
+    </header>
+
+    <section class="status-strip" aria-label="核心状态">
+      <div class="metric">
+        <span>第 <b id="dayText">1</b> 天</span>
+        <strong id="clockText">60s</strong>
+      </div>
+      <div class="metric">
+        <span>游戏爽度</span>
+        <strong id="funText">0</strong>
+      </div>
+      <div class="metric">
+        <span>导师满意度</span>
+        <strong id="mentorText">65</strong>
+      </div>
+      <div class="metric">
+        <span>被发现风险</span>
+        <strong id="riskText">10</strong>
+      </div>
+      <div class="metric">
+        <span>精力</span>
+        <strong id="focusText">80</strong>
+      </div>
+    </section>
+
+    <section class="layout-grid">
+      <aside class="panel resources-panel">
+        <div class="panel-head">
+          <h2>电脑资源</h2>
+          <span id="thermalText">温度正常</span>
+        </div>
+        <div id="resourceBars" class="bars"></div>
+
+        <div class="game-window" id="gameWindow">
+          <div class="game-sky"></div>
+          <div class="player-dot"></div>
+          <div class="enemy-dot"></div>
+          <div class="fps" id="fpsText">60 FPS</div>
+        </div>
+
+        <div class="controls">
+          <button data-action="game-off" type="button">暂停游戏</button>
+          <button data-action="game-low" type="button">低画质</button>
+          <button data-action="game-high" type="button">高画质</button>
+        </div>
+      </aside>
+
+      <section class="panel board-panel">
+        <div class="panel-head">
+          <h2>导师任务队列</h2>
+          <button id="newTaskBtn" type="button">接一个新任务</button>
+        </div>
+        <div id="taskList" class="task-list"></div>
+      </section>
+
+      <aside class="panel agents-panel">
+        <div class="panel-head">
+          <h2>Agent 池</h2>
+          <span id="agentHint">选择任务后分配</span>
+        </div>
+        <div id="agentList" class="agent-list"></div>
+      </aside>
+
+      <section class="panel ops-panel">
+        <div class="panel-head">
+          <h2>操作台</h2>
+          <span id="selectedTaskText">未选择任务</span>
+        </div>
+        <div class="ops-grid">
+          <button data-action="assign-fast" type="button">速通 Agent</button>
+          <button data-action="assign-stable" type="button">稳健 Agent</button>
+          <button data-action="assign-lab" type="button">实验 Agent</button>
+          <button data-action="assign-writer" type="button">文书 Agent</button>
+          <button data-action="throttle" type="button">限流后台</button>
+          <button data-action="freeze" type="button">冻结 Agent</button>
+          <button data-action="polish" type="button">润色降 AI 味</button>
+          <button data-action="inspect" type="button">手动检查</button>
+          <button data-action="submit" type="button">提交任务</button>
+        </div>
+      </section>
+
+      <aside class="panel message-panel">
+        <div class="panel-head">
+          <h2>导师消息</h2>
+          <span id="messageRiskText">安静</span>
+        </div>
+        <div id="messageBox" class="message-box">
+          <p>导师暂时没动静。趁现在打一把？</p>
+        </div>
+        <div class="message-actions">
+          <button data-action="reply-ai" type="button">让 Agent 回</button>
+          <button data-action="reply-self" type="button">亲自回</button>
+          <button data-action="ignore" type="button">装没看见</button>
+        </div>
+      </aside>
+
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <h2>事件日志</h2>
+          <span id="scoreText">局内评分 0</span>
+        </div>
+        <div id="logList" class="log-list"></div>
+      </section>
+    </section>
+
+    <div id="resultModal" class="modal" aria-hidden="true">
+      <div class="modal-card">
+        <h2 id="resultTitle">结算</h2>
+        <p id="resultBody"></p>
+        <div id="resultStats" class="result-stats"></div>
+        <button id="closeResultBtn" type="button">再来一局</button>
+      </div>
+    </div>
+  </main>
+  <script src="./game.js"></script>
+</body>
+</html>
