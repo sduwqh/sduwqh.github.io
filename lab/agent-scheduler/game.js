@@ -685,6 +685,27 @@
       state.gameMode = 'high';
       log('高画质启动。注意别和实验 Agent 抢显卡。');
     }
+    if (action === 'enjoy-game') {
+      state.gameMode = 'high';
+      if (state.speed === 0) {
+        state.speed = 1;
+      }
+      state.fun = clamp(state.fun + 2, 0, 100);
+      log('趁导师安静，开高画质爽玩一会。');
+      toast('爽玩游戏', '爽度上升，但留意显卡负载。', 'good');
+    }
+    if (action === 'safe-game') {
+      state.gameMode = 'low';
+      if (state.speed === 0) {
+        state.speed = 1;
+      }
+      state.risk = clamp(state.risk - 1, 0, 100);
+      log('低调挂机：游戏还在跑，后台资源也比较稳。');
+    }
+    if (action === 'plan-break') {
+      setSpeed(0);
+      return;
+    }
     if (action === 'throttle') {
       var changed = 0;
       state.agents.forEach(function (agent) {
@@ -857,14 +878,25 @@
 
   function renderMessage() {
     var box = $('messageBox');
+    var actions = $('messageActions');
     if (state.message) {
       box.classList.add('urgent');
       box.innerHTML = '<p>' + state.message.text + '</p><small>建议在 ' + formatDuration(state.message.ttl) + ' 内处理</small>';
       $('messageRiskText').textContent = '需要回应';
+      actions.innerHTML = [
+        '<button data-action="reply-ai" type="button">让 Agent 回</button>',
+        '<button data-action="reply-self" type="button">亲自回</button>',
+        '<button data-action="ignore" type="button">装没看见</button>'
+      ].join('');
     } else {
       box.classList.remove('urgent');
       box.innerHTML = '<p>导师暂时没动静。趁现在打一把？</p>';
       $('messageRiskText').textContent = '安静';
+      actions.innerHTML = [
+        '<button data-action="enjoy-game" type="button">爽玩游戏</button>',
+        '<button data-action="safe-game" type="button">低调挂机</button>',
+        '<button data-action="plan-break" type="button">暂停规划</button>'
+      ].join('');
     }
   }
 
