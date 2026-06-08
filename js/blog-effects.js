@@ -2,6 +2,66 @@
   'use strict';
 
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var themeMedia = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+
+  function getStoredTheme() {
+    try {
+      return localStorage.getItem('elpam-theme');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setStoredTheme(theme) {
+    try {
+      localStorage.setItem('elpam-theme', theme);
+    } catch (e) {}
+  }
+
+  function getCurrentTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'light';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    updateThemeToggle(theme);
+  }
+
+  function toggleTheme() {
+    var next = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    setStoredTheme(next);
+  }
+
+  function updateThemeToggle(theme) {
+    var button = document.querySelector('.theme-toggle');
+    if (!button) {
+      return;
+    }
+    var isDark = theme === 'dark';
+    button.setAttribute('aria-label', isDark ? '切换到浅色模式' : '切换到深色模式');
+    button.setAttribute('title', isDark ? '浅色模式' : '深色模式');
+    button.innerHTML = '<i class="fas ' + (isDark ? 'fa-sun' : 'fa-moon') + '"></i>';
+  }
+
+  function ensureThemeToggle() {
+    var navbarEnd = document.querySelector('.navbar-end');
+    if (!navbarEnd || document.querySelector('.theme-toggle')) {
+      updateThemeToggle(getCurrentTheme());
+      return;
+    }
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'navbar-item theme-toggle';
+    button.addEventListener('click', toggleTheme);
+    var searchButton = navbarEnd.querySelector('.navbar-item.search');
+    if (searchButton) {
+      navbarEnd.insertBefore(button, searchButton);
+    } else {
+      navbarEnd.appendChild(button);
+    }
+    updateThemeToggle(getCurrentTheme());
+  }
 
   function ensureProgressBar() {
     if (document.querySelector('.reading-progress')) {
@@ -163,6 +223,7 @@
   }
 
   function init() {
+    ensureThemeToggle();
     ensureProgressBar();
     updateProgress();
     enhanceHeadings();
@@ -179,4 +240,11 @@
   document.addEventListener('click', function () {
     window.setTimeout(enhanceSearch, 60);
   });
+  if (themeMedia && themeMedia.addEventListener) {
+    themeMedia.addEventListener('change', function (event) {
+      if (!getStoredTheme()) {
+        applyTheme(event.matches ? 'dark' : 'light');
+      }
+    });
+  }
 })();

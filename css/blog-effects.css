@@ -3,14 +3,36 @@
   --elpam-accent-strong: #0f766e;
   --elpam-ink: #1f2937;
   --elpam-muted: #6b7280;
+  --elpam-bg: #f7faf9;
+  --elpam-card-bg: #ffffff;
+  --elpam-text: #363636;
   --elpam-border: rgba(15, 118, 110, 0.16);
   --elpam-soft: rgba(38, 166, 154, 0.08);
   --elpam-gold: #f59e0b;
   --elpam-card-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --elpam-accent: #5eead4;
+  --elpam-accent-strong: #99f6e4;
+  --elpam-ink: #e5e7eb;
+  --elpam-muted: #a7b0bf;
+  --elpam-bg: #0e141b;
+  --elpam-card-bg: #151d27;
+  --elpam-text: #dbe3ef;
+  --elpam-border: rgba(94, 234, 212, 0.18);
+  --elpam-soft: rgba(94, 234, 212, 0.1);
+  --elpam-card-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
+}
+
 html {
   scroll-behavior: smooth;
+}
+
+body {
+  background: var(--elpam-bg);
+  color: var(--elpam-text);
 }
 
 body::before {
@@ -62,13 +84,35 @@ body::before {
   margin-left: 0.25rem;
 }
 
-.navbar-main .navbar-item.search i {
+.navbar-main .navbar-item.search i,
+.theme-toggle i {
   transform-origin: center;
   transition: transform 0.18s ease;
 }
 
-.navbar-main .navbar-item.search:hover i {
+.navbar-main .navbar-item.search:hover i,
+.theme-toggle:hover i {
   transform: scale(1.12) rotate(-8deg);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.65rem;
+  min-height: 2.5rem;
+  margin-left: 0.25rem;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.theme-toggle:hover {
+  color: var(--elpam-accent-strong);
+  background: var(--elpam-soft);
 }
 
 .column-main > .card,
@@ -437,6 +481,180 @@ h4:hover .heading-anchor {
   to {
     opacity: 1;
   }
+}
+
+html[data-theme="dark"] body::before {
+  background:
+    linear-gradient(rgba(94, 234, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), transparent 74%);
+}
+
+html[data-theme="dark"] .navbar-main {
+  background: rgba(14, 20, 27, 0.82);
+  border-bottom-color: rgba(94, 234, 212, 0.12);
+}
+
+html[data-theme="dark"] .navbar-main .navbar-item,
+html[data-theme="dark"] .navbar-main .navbar-logo,
+html[data-theme="dark"] .footer,
+html[data-theme="dark"] .footer a,
+html[data-theme="dark"] .footer .level-item,
+html[data-theme="dark"] .footer .has-text-grey {
+  color: var(--elpam-text);
+}
+
+html[data-theme="dark"] .navbar-main .navbar-item:hover,
+html[data-theme="dark"] .navbar-main .navbar-item.is-active,
+html[data-theme="dark"] .footer a:hover {
+  color: var(--elpam-accent-strong);
+}
+
+html[data-theme="dark"] .footer {
+  background: #0e141b;
+  border-top: 1px solid rgba(94, 234, 212, 0.1);
+}
+
+html[data-theme="dark"] .footer strong,
+html[data-theme="dark"] .footer .title {
+  color: #f3f7fb;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .box,
+html[data-theme="dark"] .searchbox .searchbox-container {
+  color: var(--elpam-text);
+  background: var(--elpam-card-bg);
+  border-color: rgba(94, 234, 212, 0.12);
+  box-shadow: var(--elpam-card-shadow);
+}
+
+html[data-theme="dark"] .title,
+html[data-theme="dark"] .content h1,
+html[data-theme="dark"] .content h2,
+html[data-theme="dark"] .content h3,
+html[data-theme="dark"] .content h4,
+html[data-theme="dark"] .content h5,
+html[data-theme="dark"] .content h6,
+html[data-theme="dark"] .content strong,
+html[data-theme="dark"] .article-meta,
+html[data-theme="dark"] .widget .title {
+  color: #f3f7fb;
+}
+
+html[data-theme="dark"] .content,
+html[data-theme="dark"] .content p,
+html[data-theme="dark"] .blog-article-card.is-index-card .content,
+html[data-theme="dark"] .article-meta .level-item,
+html[data-theme="dark"] .link-muted {
+  color: var(--elpam-muted);
+}
+
+html[data-theme="dark"] a,
+html[data-theme="dark"] .link-muted:hover {
+  color: var(--elpam-accent-strong);
+}
+
+html[data-theme="dark"] .blog-article-card::before {
+  background: linear-gradient(135deg, rgba(94, 234, 212, 0.12), transparent 36%);
+}
+
+html[data-theme="dark"] .blog-article-card .card-image .image {
+  background: #0f1720;
+}
+
+html[data-theme="dark"] .article-tags a,
+html[data-theme="dark"] .article-tags-index a,
+html[data-theme="dark"] .article-ai-note {
+  color: var(--elpam-accent-strong) !important;
+  background: rgba(94, 234, 212, 0.1);
+  border-color: rgba(94, 234, 212, 0.2);
+}
+
+html[data-theme="dark"] .article-tags a:hover,
+html[data-theme="dark"] .article-tags-index a:hover {
+  color: #061018 !important;
+  background: var(--elpam-accent);
+  border-color: var(--elpam-accent);
+}
+
+html[data-theme="dark"] .article-more.button {
+  color: var(--elpam-accent-strong);
+  background: rgba(94, 234, 212, 0.08);
+  border-color: rgba(94, 234, 212, 0.24);
+}
+
+html[data-theme="dark"] .article-more.button:hover {
+  color: #061018;
+  background: var(--elpam-accent);
+}
+
+html[data-theme="dark"] .content blockquote,
+html[data-theme="dark"] .content table,
+html[data-theme="dark"] .content pre,
+html[data-theme="dark"] .highlight,
+html[data-theme="dark"] figure.highlight {
+  color: #d7deea;
+  background: #101821;
+  border-color: rgba(94, 234, 212, 0.12);
+}
+
+html[data-theme="dark"] .content table td,
+html[data-theme="dark"] .content table th {
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-theme="dark"] .content code {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+html[data-theme="dark"] .post-navigation a {
+  color: var(--elpam-text);
+  background: rgba(21, 29, 39, 0.82);
+  border-color: rgba(94, 234, 212, 0.16);
+}
+
+html[data-theme="dark"] .searchbox {
+  background: rgba(3, 7, 18, 0.76);
+}
+
+html[data-theme="dark"] .searchbox .searchbox-header,
+html[data-theme="dark"] .searchbox .searchbox-input {
+  color: var(--elpam-text);
+  background: #101821;
+}
+
+html[data-theme="dark"] .searchbox .searchbox-body,
+html[data-theme="dark"] .searchbox .searchbox-result-section {
+  border-color: rgba(94, 234, 212, 0.12);
+}
+
+html[data-theme="dark"] .searchbox .searchbox-result-item:not(.disabled):not(.active):not(:active):hover {
+  background: rgba(94, 234, 212, 0.08);
+}
+
+html[data-theme="dark"] .searchbox .searchbox-result-item em {
+  color: #111827;
+  background: rgba(251, 191, 36, 0.75);
+}
+
+html[data-theme="dark"] .searchbox .searchbox-close:hover,
+html[data-theme="dark"] .searchbox-pagination-link {
+  background: rgba(94, 234, 212, 0.08);
+}
+
+html[data-theme="dark"] .tag-cloud a,
+html[data-theme="dark"] .widget .menu-list a,
+html[data-theme="dark"] .category-list a {
+  color: var(--elpam-muted);
+}
+
+html[data-theme="dark"] .tag-cloud a:hover,
+html[data-theme="dark"] .widget .menu-list a:hover,
+html[data-theme="dark"] .widget .menu-list a.is-active,
+html[data-theme="dark"] .category-list a:hover {
+  color: var(--elpam-accent-strong);
 }
 
 @media (max-width: 768px) {
