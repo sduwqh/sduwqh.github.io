@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Agent Sandbox Checkpoint &amp; Restore — 当 AI Agent 需要存档读档</title>
+    <title>Agent Sandbox Checkpoint &amp; Restore</title>
     <url>/2026/06/09/Agent%20Sandbox%20Checkpoint&amp;Restore/</url>
     <content><![CDATA[AI Agent 的”存档读档”难题
 当 AI agent 从对话框走出来，开始在真实的 Linux 环境里编译代码、装包、跑后台进程时，一个被低估的基础设施问题浮现了：agent 的状态在 OS 里，但我们不知道怎么存、什么时候存、存了怎么恢复。
