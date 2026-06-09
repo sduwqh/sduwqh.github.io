@@ -44,13 +44,68 @@ AgentCgroup: Understanding and Controlling OS Resources of AI Agents — Yusheng
       </tags>
   </entry>
   <entry>
-    <title>LangChain &amp; LangGraph — LLM Agent 开发框架</title>
-    <url>/2026/06/08/LangChain%20%E4%B8%8E%20LangGraph/</url>
-    <content><![CDATA[每次调用提供 thread_idconfig &#x3D; {“configurable”: {“thread_id”: “conversation-1”}}
-第一步：state 自动保存graph.invoke({“messages”: [HumanMessage(“帮我改 bug”)]}, config)
-→ save: state_1第二步：state 自动保存graph.invoke({“messages”: [AIMessage(“我来改…”)]}, config)  
-→ save: state_2可以回退到 state_1 重新执行graph.invoke(None, config)  # 从最近的 checkpoint 继续
-### 支持的存储后端| 后端 | 持久性 | 适用场景 ||------|--------|----------|| MemorySaver | 进程内，重启即丢 | 开发调试 || SqliteSaver | 本地文件 | 单机持久 || PostgresSaver | 数据库 | 生产环境 || 自定义 | 任意 | 对接自己的存储 |### 它存的到底是什么？一个典型的 checkpoint 内容：```json&#123;  &quot;v&quot;: 1,  &quot;ts&quot;: &quot;2026-06-08T12:00:00Z&quot;,  &quot;channel_values&quot;: &#123;    &quot;messages&quot;: [      &#123;&quot;type&quot;: &quot;human&quot;, &quot;content&quot;: &quot;帮我修 bug&quot;&#125;,      &#123;&quot;type&quot;: &quot;ai&quot;, &quot;content&quot;: &quot;我来看看...&quot;, &quot;tool_calls&quot;: [&#123;&quot;name&quot;: &quot;sed&quot;, &quot;args&quot;: &#123;...&#125;&#125;]&#125;,      &#123;&quot;type&quot;: &quot;tool&quot;, &quot;content&quot;: &quot;文件已修改&quot;&#125;    ],    &quot;some_variable&quot;: &quot;some_value&quot;  &#125;,  &quot;channel_versions&quot;: &#123;...&#125;,  &quot;versions_seen&quot;: &#123;...&#125;&#125;
+    <title></title>
+    <url>/2026/06/09/LangChain%20%E4%B8%8E%20LangGraph/</url>
+    <content><![CDATA[LangChain &amp; LangGraph: LLM Agent 开发框架概述LangChain 和 LangGraph 是 LangChain Inc. 推出的两个 Python&#x2F;JS 框架，用于构建 LLM 驱动的应用。LangChain 解决”怎么把 LLM 和工具串起来”，LangGraph 解决”怎么让这个过程有状态、可分支、可回退”。两者是同一个生态的不同抽象层级——LangGraph 通常构建在 LangChain 之上。
+在 AgentFS 知识链中，它们代表了应用层状态管理的典型方案——能做什么、不能做什么，构成了 Crab 和 DeltaBox 要解决的 OS 层问题的参照系。
+LangChain核心抽象LangChain 提供了三个核心抽象来构建 LLM 应用：
+① Chain（链）：把多个步骤串联成流水线。最简单的是一个 prompt → LLM → 输出解析器。
+from langchain.chains import LLMChainchain = LLMChain(llm=llm, prompt=prompt)result = chain.run(input=&quot;...&quot;)
+
+早期 LangChain 的核心就是 Chain。但 Chain 的局限很明显——它是线性的、无状态的、不可分支的。
+② Tool（工具）：让 LLM 可以调用外部函数——搜索、计算、读写文件、执行 shell 命令。工具的定义就是一个带描述的 Python 函数：
+@tooldef search(query: str) -&gt; str:    &quot;&quot;&quot;Search the web for information.&quot;&quot;&quot;    return google_search(query)
+
+③ Agent（智能体）：把 LLM、工具、决策循环组合在一起。最经典的模式是 ReAct——LLM 输出”思考→行动→观察→思考→…”的循环：
+Thought: 我需要搜索一下这个错误信息Action: search(&quot;TypeError: &#x27;NoneType&#x27; object is not iterable&quot;)Observation: [搜索结果...]Thought: 这个错误通常是因为...我来修改代码Action: edit_file(&quot;main.py&quot;, ...)
+
+定位LangChain 解决的核心问题是集成——它提供了统一的接口来对接几十种 LLM 提供商、向量数据库、文档加载器、工具。但它不擅长有状态的复杂流程控制。这就是 LangGraph 要解决的问题。
+LangGraph核心模型：图LangGraph 把 agent 的执行建模为有向图（graph）：
+Nodes（节点）= 计算步骤（调用 LLM、执行工具、做判断）Edges（边）= 流转逻辑（下一步去哪）State（状态）= 在节点之间传递的共享数据
+
+一个典型的 ReAct agent 在 LangGraph 里：
+┌──────────┐│   LLM    │ ← 调用大模型生成思考+行动│   Node   │└────┬─────┘     │ 有 tool_calls？┌────▼─────┐     Yes ────→ ┌──────────┐│  Decide  │               │  Tool    ││  Node    │               │  Node    │──┐└────┬─────┘               └──────────┘  │     │ No                                │     ▼                       结果返回     │ ┌──────┐                    ┌───────────┘ │ END  │           ┌────────▼─────┐ └──────┘           │    LLM       │ ← 带着工具结果再思考                    │    Node      │                    └──────────────┘
+
+关键特性① 有状态执行：每个节点读写共享的 state dict，积累对话历史、中间结果、变量。
+② 条件分支：边可以是函数——根据 state 的内容决定下一步去哪。
+③ 循环：图可以有环（agent 反复思考→行动→思考），传统 Chain 做不到。
+④ Human-in-the-loop：可以在任意节点暂停，等待人类审批后再继续。
+⑤ 流式输出：每个节点可以 stream 输出 token 级别的增量。
+Checkpointer什么Checkpointer 是 LangGraph 最重要的内置机制之一。它在每个 super-step 结束后自动保存当前的 graph state。
+怎么工作每个 state 是一个 Python 字典（通常包含 messages 列表、中间变量、元数据）。Checkpointer 负责：
+from langgraph.checkpoint.memory import MemorySavercheckpointer = MemorySaver()graph = builder.compile(checkpointer=checkpointer)# 每次调用提供 thread_idconfig = &#123;&quot;configurable&quot;: &#123;&quot;thread_id&quot;: &quot;conversation-1&quot;&#125;&#125;# 第一步：state 自动保存graph.invoke(&#123;&quot;messages&quot;: [HumanMessage(&quot;帮我改 bug&quot;)]&#125;, config)# → save: state_1# 第二步：state 自动保存graph.invoke(&#123;&quot;messages&quot;: [AIMessage(&quot;我来改...&quot;)]&#125;, config)  # → save: state_2# 可以回退到 state_1 重新执行graph.invoke(None, config)  # 从最近的 checkpoint 继续
+
+支持的存储后端
+
+
+后端
+持久性
+适用场景
+
+
+
+MemorySaver
+进程内，重启即丢
+开发调试
+
+
+SqliteSaver
+本地文件
+单机持久
+
+
+PostgresSaver
+数据库
+生产环境
+
+
+自定义
+任意
+对接自己的存储
+
+
+它存的到底是什么？一个典型的 checkpoint 内容：
+&#123;  &quot;v&quot;: 1,  &quot;ts&quot;: &quot;2026-06-08T12:00:00Z&quot;,  &quot;channel_values&quot;: &#123;    &quot;messages&quot;: [      &#123;&quot;type&quot;: &quot;human&quot;, &quot;content&quot;: &quot;帮我修 bug&quot;&#125;,      &#123;&quot;type&quot;: &quot;ai&quot;, &quot;content&quot;: &quot;我来看看...&quot;, &quot;tool_calls&quot;: [&#123;&quot;name&quot;: &quot;sed&quot;, &quot;args&quot;: &#123;...&#125;&#125;]&#125;,      &#123;&quot;type&quot;: &quot;tool&quot;, &quot;content&quot;: &quot;文件已修改&quot;&#125;    ],    &quot;some_variable&quot;: &quot;some_value&quot;  &#125;,  &quot;channel_versions&quot;: &#123;...&#125;,  &quot;versions_seen&quot;: &#123;...&#125;&#125;
 
 全部是纯 Python 数据结构。没有任何文件系统状态、进程状态、或 OS 级别的任何东西。
 三个能力① 断点续跑：agent 崩溃后从最近的 checkpoint 恢复执行，不需要重跑 LLM 调用。
@@ -111,14 +166,5 @@ See Also
 [[0wiki&#x2F;agentfs&#x2F;AgentCgroup AI Agent OS 资源控制]] — 资源维度，与 LangGraph 互补
 
 ]]></content>
-      <categories>
-        <category>系统研究</category>
-      </categories>
-      <tags>
-        <tag>AI Agent</tag>
-        <tag>LLM</tag>
-        <tag>LangChain</tag>
-        <tag>LangGraph</tag>
-      </tags>
   </entry>
 </search>
