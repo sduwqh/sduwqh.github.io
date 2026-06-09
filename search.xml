@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>Agent Sandbox Checkpoint &amp; Restore</title>
+    <url>/2026/06/09/Agent%20Sandbox%20Checkpoint&amp;Restore/</url>
+    <content><![CDATA[AI Agent 的”存档读档”难题
+当 AI agent 从对话框走出来，开始在真实的 Linux 环境里编译代码、装包、跑后台进程时，一个被低估的基础设施问题浮现了：agent 的状态在 OS 里，但我们不知道怎么存、什么时候存、存了怎么恢复。
+
+
+2025 年之后，AI agent 的形态发生了根本变化。Claude Code、Codex、SWE-agent 这些系统不再满足于生成文本——它们能够登录 Linux 终端，运行 pip install，修改源码，启动后台服务，反复试错直到任务完成。agent 的执行不再是”LLM 推理→输出文字”，而是LLM 推理→工具操作→OS 产生副作用→观察结果→继续推理的循环。
+这意味着 agent 的有效状态远远超出了我们习惯的”对话上下文”。一个 agent 的状态至少包括两个维度：文件系统状态——被 sed 改过的源码、被 pip install 装的包路径、被 rm 删除的临时文件，这些不是数据，是 agent 赖以执行的环境；进程状态——后台运行的数据库和 daemon、agent 自己的 Python 运行时堆，这些不是 agent 的外部工具，而是它创造出来、后续步骤依赖的副产物。
+两者缺一不可。只恢复文件系统但丢掉进程内存，agent 的记忆停留在旧时刻，以为自己改过的文件还在；只恢复进程但不动文件系统，agent 的逻辑正确，但脚下的磁盘是另一个分支的。任何一种不一致都会让 agent 的行为变得不可预测。
+这就引出了一个看似简单的问题：怎么给这种”OS 级的 agent 状态”做存档读档？
+我们最容易想到的方案是应用层——把 agent 的聊天历史、工具调用记录、中间变量序列化存下来。这也是目前大多数 agent 框架（LangGraph、AutoGen 等）的默认做法。但问题在于，这些框架存的是 Python 对象，存的是”agent 认为自己做了什么”，不是 agent 实际做了什么。一条 run_shell_command(&quot;grep error *.log&quot;) 在框架里只是一个字符串参数，它有没有写文件、有没有创建子进程——框架不知道。一旦崩溃恢复，agent 回到的是它的”记忆”，但面对的是一个陌生的 OS 环境：包没了、进程挂了、文件被改过。论文 Crab 做了一个实验：在终端密集型任务中注入随机崩溃，只恢复聊天历史——正确率只有 8%。加上文件系统快照呢？也只有 48%。因为很多任务依赖那些悄悄被安装的包和后台进程——应用层根本看不到这些。
+那另一端的 OS 层方案呢？直接给整个沙箱做全量快照——文件系统用 ZFS snapshot，进程用 CRIU dump。这确实是正确的，但它贵得离谱。进程 dump 的延迟与内存大小成正比，agent 沙箱的内存经常膨胀到几个 GB。更关键的是，在现代 agent 部署中，一台物理机上往往同时跑几十上百个沙箱——如果每个沙箱每轮都做全量 dump，共享的磁盘带宽很快被打满。并发 64 个 1GB 进程的 CRIU dump，耗时可以超过 40 秒。Crab 的数据是：在 96 沙箱密度下，每轮全量 checkpoint 的方案比无故障执行慢了 3.78 倍——比从头重跑还慢。
+于是我们面对一个尴尬的两难：应用层方案便宜但不正确，OS 层方案正确但不可 scale。
+这个两难的根源，我认为是 agent 系统架构中的一道结构性裂缝——可以称之为 Agent-OS 语义鸿沟。Agent 框架和 OS 内核各自掌握了恢复正确性所需的一半信息，但彼此不沟通。框架知道这一轮 agent 调了哪些工具、输出了什么，但不知道这些操作在 OS 层面产生了什么效果；内核知道哪些文件被改了、哪些进程被创建了、哪些内存页变脏了，但没有 agent 的轮次概念，无法判断哪些效果对恢复来说是关键的。
+这道鸿沟导致了一个直接的后果：我们不知道什么时候该做 checkpoint。而实际上，agent 的大多数操作是只读的——cat 看代码、grep 搜索日志、ls 列目录。这些操作产生了零个需要恢复的副作用。如果我们能识别出这些”无事发生的轮次”并跳过 checkpoint，性能可以大幅改善。但怎么识别？通过分析工具调用的 API 签名行不通——run_shell_command(&quot;python script.py&quot;) 可能在 OS 层面做任何事，语法上完全不可区分。在实际的 agent 轨迹中，超过 60% 的工具调用是裸 shell 命令，其中只有不到 5% 携带了显式的副作用信号（如 &gt; 重定向）。
+还有另一层紧迫性，让这个问题超出了一般”容错”的范畴。
+如果说 agent 只是偶尔崩溃才恢复一下，存档读档无论如何都算不上瓶颈。但 agent 正在进入一种全新的使用模式——高频状态探索——这让 C&#x2F;R 从”保险措施”变成了核心路径上的性能决定因素。MCTS 树搜索让 agent 在每一步展开多个候选动作，每个都在沙箱里执行，选最优分支继续，每一步都要 checkpoint、反复 rollback，一次搜索可能涉及成百上千次 C&#x2F;R。RL 训练中，每个训练步骤需要从同一个初始沙箱 fork 出几十上百个并行 rollout，如果 fork 操作本身要花几百毫秒，GPU 大部分时间都在等沙箱就绪。还有推理模型（o1、DeepSeek-R1 等）的工具使用——它们在推理链中反复执行代码，本质就是隐式的深度搜索。在这些场景下，存档和读档不再是”偶尔用一次的后台操作”，而是每分钟发生几十到上千次的在线操作，直接决定了系统的吞吐量上限。
+针对这个问题，最近有两项工作分别从不同角度给出了方案。
+港科大的 Crab 选择从”该不该做”入手。既然 agent 框架看不到 OS 效应，那就在 OS 层面装一个监控摄像头。Crab 在 Linux 内核里挂载 eBPF 探针，在每个 agent 轮次结束后观测 OS 效应——文件有没有变？进程有没有生或死？内存页有没有变脏？基于这种观测，把每一轮分类为：跳过 &#x2F; 只存文件系统 &#x2F; 完整存档。结果很直接：87% 的轮次被跳过，零额外开销。Crab 还利用了一个天然的时间窗口——agent 等 LLM 回复的那几秒——把 checkpoint 异步执行在这段时间里。效果是，一台机器上同时跑 96 个沙箱，端到端时间开销不到 1.9%，恢复正确率 100%。
+上海交大和华为的 DeltaBox 从另一个角度切入：如果每次 C&#x2F;R 本身能做到毫秒级，那”要不要做”就没那么重要了。它的核心洞察是，agent 每步通常只改几个文件、几页内存，相邻存档点高度相似——与其每次都复制全量，不如只存增量。实现上，DeltaBox 改造了 Linux 的 OverlayFS，做 checkpoint 时只是把当前的修改层冻结、插入新层，不复制文件数据，耗时 1.1 毫秒；对进程状态，在 CRIU 增量 dump 之外额外 fork 出一份冻结的 agent 进程当模板，恢复时直接从模板 fork，内核只复制 page table 不碰物理内存，3.75 毫秒。一次完整存档加恢复加起来不到 20 毫秒。在 SWE-bench 的 MCTS 场景下，状态管理开销从 47-77% 压缩到了 3-6%。
+这两篇文章虽然解决的是同一个问题域，但视角截然不同，而且不互相排斥。Crab 的思路是”省着做”——通过语义判断减少不必要的次数，适合长时间任务，大部分轮次都在看代码搜文档，只有少数轮次真有状态变更。DeltaBox 的思路是”做得快”——通过增量机制让每次 C&#x2F;R 本身的代价降到极低，适合高频搜索场景，哪怕每次都要做，毫秒级延迟也不至于拖垮搜索吞吐量。而且这两个思路可以叠加——一个学了 Crab 的系统如果配上 DeltaBox 的毫秒级 C&#x2F;R 原语，不但能跳过大部分不必要的 checkpoint，连那少部分必须做的也几乎零开销；一个学了 DeltaBox 的系统如果再加上 Crab 的 eBPF 观测能力，可以在增量 C&#x2F;R 之上进一步判断”这一轮是不是连增量都没产生”。
+最终，我认为 agent 的存档读档问题远不止是一个性能优化。它触及了 agent 基础设施的一个根本方向：agent 到底应该活在”谁的抽象层”里？
+目前主流的 agent 框架全在应用层做的——存对话、管 token、序列化 graph state。这足够吗？对文本任务够。但当 agent 真正开始在 OS 里做事情——装包、写文件、起后台服务——应用层的抽象就不够了。Crab 和 DeltaBox 的价值不只是提供了某个具体的工程方案，而是指出了一个方向：agent 的状态管理必须跨越应用和 OS 的边界。谁跨过去了，就解锁了 agent 的下一级能力（树搜索、RL 训练、推测执行）；谁没跨过去，就只能困在线性执行的范式里。
+从这个角度看，Crab 结尾那句”OS 可见效应可以作为自适应状态管理的轻量级语义信号——这个原则不仅适用于 C&#x2F;R，也适用于调度、资源隔离、安全审计”，可能比它自己的实验数据更值得长期关注。我们可能需要的不只是更好的 checkpoint 工具，而是一整套面向 agent 的 OS 层原语——细粒度的状态追踪、语义感知的资源控制、上下文感知的故障隔离。
+
+参考文献
+Crab: A Semantics-Aware Checkpoint&#x2F;Restore Runtime for Agent Sandboxes — Tianyuan Wu et al., HKUST, 2026
+DeltaBox: Scaling Stateful AI Agents with Millisecond-Level Sandbox Checkpoint&#x2F;Rollback — Yunpeng Dong et al., SJTU &amp; Huawei, 2026
+AgentCgroup: Understanding and Controlling OS Resources of AI Agents — Yusheng Zheng et al., UC Santa Cruz &amp; Virginia Tech, 2026
+
+]]></content>
+      <categories>
+        <category>系统研究</category>
+      </categories>
+      <tags>
+        <tag>AI Agent</tag>
+        <tag>沙箱</tag>
+        <tag>Checkpoint-Restore</tag>
+        <tag>eBPF</tag>
+        <tag>操作系统</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>LangChain &amp; LangGraph — LLM Agent 开发框架</title>
+    <url>/2026/06/08/LangChain%20%E4%B8%8E%20LangGraph/</url>
+    <content><![CDATA[每次调用提供 thread_idconfig &#x3D; {“configurable”: {“thread_id”: “conversation-1”}}
+第一步：state 自动保存graph.invoke({“messages”: [HumanMessage(“帮我改 bug”)]}, config)
+→ save: state_1第二步：state 自动保存graph.invoke({“messages”: [AIMessage(“我来改…”)]}, config)  
+→ save: state_2可以回退到 state_1 重新执行graph.invoke(None, config)  # 从最近的 checkpoint 继续
+### 支持的存储后端| 后端 | 持久性 | 适用场景 ||------|--------|----------|| MemorySaver | 进程内，重启即丢 | 开发调试 || SqliteSaver | 本地文件 | 单机持久 || PostgresSaver | 数据库 | 生产环境 || 自定义 | 任意 | 对接自己的存储 |### 它存的到底是什么？一个典型的 checkpoint 内容：```json&#123;  &quot;v&quot;: 1,  &quot;ts&quot;: &quot;2026-06-08T12:00:00Z&quot;,  &quot;channel_values&quot;: &#123;    &quot;messages&quot;: [      &#123;&quot;type&quot;: &quot;human&quot;, &quot;content&quot;: &quot;帮我修 bug&quot;&#125;,      &#123;&quot;type&quot;: &quot;ai&quot;, &quot;content&quot;: &quot;我来看看...&quot;, &quot;tool_calls&quot;: [&#123;&quot;name&quot;: &quot;sed&quot;, &quot;args&quot;: &#123;...&#125;&#125;]&#125;,      &#123;&quot;type&quot;: &quot;tool&quot;, &quot;content&quot;: &quot;文件已修改&quot;&#125;    ],    &quot;some_variable&quot;: &quot;some_value&quot;  &#125;,  &quot;channel_versions&quot;: &#123;...&#125;,  &quot;versions_seen&quot;: &#123;...&#125;&#125;
+
+全部是纯 Python 数据结构。没有任何文件系统状态、进程状态、或 OS 级别的任何东西。
+三个能力① 断点续跑：agent 崩溃后从最近的 checkpoint 恢复执行，不需要重跑 LLM 调用。
+② Time Travel（时间旅行）：可以回退到历史任意一步的 state，从那里重新分枝：
+# 回退到 state_1graph.update_state(config, state_1_values)# 从 state_1 出发重新执行graph.invoke(None, config)
+
+③ 分支（Fork）：从同一个历史 checkpoint 出发，用不同 thread_id 分叉出多条轨迹：
+fork_config = &#123;&quot;configurable&quot;: &#123;&quot;thread_id&quot;: &quot;branch-2&quot;&#125;&#125;# 从 state_1 的状态开始，但是新分支graph.update_state(fork_config, state_1_values)graph.invoke(&#123;&quot;messages&quot;: [HumanMessage(&quot;另一种方案...&quot;)]&#125;, fork_config)
+
+物理局限：Checkpointer 做不到的事这是 LangGraph 在 AgentFS 知识链中的关键位置——它定义了应用层状态管理的边界。
+
+
+
+Checkpointer 能做到
+Checkpointer 做不到
+
+
+
+保存对话历史
+恢复被 sed 改过的文件
+
+
+保存 Python 变量
+撤销 pip install 装的包
+
+
+记录当前图节点位置
+恢复被杀掉的后台进程
+
+
+序列化 Pydantic models
+恢复被 rm 删除的文件
+
+
+时间旅行到历史 state
+让文件系统回到历史时刻
+
+
+具体例子Turn 1: agent 执行 pip install torch → torch 被安装到 /usr/local/lib/Turn 2: agent 执行 python train.py（依赖 torch） → 训练了 10 分钟Turn 3: agent 发现走错了，想回退到 Turn 1LangGraph Checkpointer 回退:  ✅ state 回到 Turn 1 → agent 的&quot;记忆&quot;退回去了  ❌ torch 还在 → 文件系统是 Turn 2 的状态  ❌ 训练进程的中间状态丢了 → 要么残留要么丢失    → agent &quot;记得&quot; Turn 1，但&quot;看到&quot; Turn 2 的环境  → 状态不一致，无法保证正确性
+
+在 AgentFS 知识链中的位置LangChain / LangGraph（本页）  ↓ 逻辑状态管理（纯 Python 对象）  ↓ 发现了物理边界  ↓Crab → 什么时候需要 OS 级 C/RDeltaBox → 怎么做到毫秒级 OS 级 C/RAgentCgroup → OS 资源怎么隔离和控制
+
+三篇 AgentFS 论文都在不同程度上引用了 LangGraph 不作为竞争者，而作为互补层：
+
+Crab 提到 LangGraph 的 persistence 是 chat-only 恢复的典型代表，正确率只有 8-13%
+DeltaBox 实现了 LangGraph Checkpointer 接口的适配器：put() 触发 OS 级 C&#x2F;R，get() 触发 OS 级 restore
+AgentCgroup 讨论的是更底层的问题（资源），与 LangGraph 无直接交集
+
+Sources
+LangChain: https://github.com/langchain-ai/langchain
+LangGraph: https://github.com/langchain-ai/langgraph
+LangGraph Persistence Docs: https://docs.langchain.com/oss/python/langgraph/persistence
+本页为基于 AI 训练知识综合撰写的背景概念解释。
+
+See Also
+[[0wiki&#x2F;agentfs&#x2F;Crab 语义感知的 Agent Sandbox 检查点与恢复运行时]] — LangGraph Checkpointer 是 chat-only 恢复的代表，Crab 展示了其局限
+[[0wiki&#x2F;agentfs&#x2F;DeltaBox 毫秒级 Agent Sandbox 检查点回滚]] — DeltaBox 实现了 LangGraph Checkpointer 适配器
+[[0wiki&#x2F;agentfs&#x2F;AgentCgroup AI Agent OS 资源控制]] — 资源维度，与 LangGraph 互补
+
+]]></content>
+      <categories>
+        <category>系统研究</category>
+      </categories>
+      <tags>
+        <tag>AI Agent</tag>
+        <tag>LLM</tag>
+        <tag>LangChain</tag>
+        <tag>LangGraph</tag>
+      </tags>
+  </entry>
+</search>
