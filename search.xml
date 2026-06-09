@@ -47,7 +47,7 @@ AgentCgroup: Understanding and Controlling OS Resources of AI Agents — Yusheng
     <title></title>
     <url>/2026/06/09/LangChain%20%E4%B8%8E%20LangGraph/</url>
     <content><![CDATA[LangChain &amp; LangGraph: LLM Agent 开发框架概述LangChain 和 LangGraph 是 LangChain Inc. 推出的两个 Python&#x2F;JS 框架，用于构建 LLM 驱动的应用。LangChain 解决”怎么把 LLM 和工具串起来”，LangGraph 解决”怎么让这个过程有状态、可分支、可回退”。两者是同一个生态的不同抽象层级——LangGraph 通常构建在 LangChain 之上。
-在 AgentFS 知识链中，它们代表了应用层状态管理的典型方案——能做什么、不能做什么，构成了 Crab 和 DeltaBox 要解决的 OS 层问题的参照系。
+它们是当前最主流的 LLM Agent 应用层框架，适合快速搭建原型和需要复杂流程控制的生产级 Agent。
 
 
 LangChain核心抽象LangChain 提供了三个核心抽象来构建 LLM 应用：
@@ -147,24 +147,11 @@ Checkpointer 做不到
 
 具体例子Turn 1: agent 执行 pip install torch → torch 被安装到 /usr/local/lib/Turn 2: agent 执行 python train.py（依赖 torch） → 训练了 10 分钟Turn 3: agent 发现走错了，想回退到 Turn 1LangGraph Checkpointer 回退:  ✅ state 回到 Turn 1 → agent 的&quot;记忆&quot;退回去了  ❌ torch 还在 → 文件系统是 Turn 2 的状态  ❌ 训练进程的中间状态丢了 → 要么残留要么丢失    → agent &quot;记得&quot; Turn 1，但&quot;看到&quot; Turn 2 的环境  → 状态不一致，无法保证正确性
 
-在 AgentFS 知识链中的位置LangChain / LangGraph（本页）  ↓ 逻辑状态管理（纯 Python 对象）  ↓ 发现了物理边界  ↓Crab → 什么时候需要 OS 级 C/RDeltaBox → 怎么做到毫秒级 OS 级 C/RAgentCgroup → OS 资源怎么隔离和控制
-
-三篇 AgentFS 论文都在不同程度上引用了 LangGraph 不作为竞争者，而作为互补层：
-
-Crab 提到 LangGraph 的 persistence 是 chat-only 恢复的典型代表，正确率只有 8-13%
-DeltaBox 实现了 LangGraph Checkpointer 接口的适配器：put() 触发 OS 级 C&#x2F;R，get() 触发 OS 级 restore
-AgentCgroup 讨论的是更底层的问题（资源），与 LangGraph 无直接交集
-
 Sources
 LangChain: https://github.com/langchain-ai/langchain
 LangGraph: https://github.com/langchain-ai/langgraph
 LangGraph Persistence Docs: https://docs.langchain.com/oss/python/langgraph/persistence
 本页为基于 AI 训练知识综合撰写的背景概念解释。
-
-See Also
-[[0wiki&#x2F;agentfs&#x2F;Crab 语义感知的 Agent Sandbox 检查点与恢复运行时]] — LangGraph Checkpointer 是 chat-only 恢复的代表，Crab 展示了其局限
-[[0wiki&#x2F;agentfs&#x2F;DeltaBox 毫秒级 Agent Sandbox 检查点回滚]] — DeltaBox 实现了 LangGraph Checkpointer 适配器
-[[0wiki&#x2F;agentfs&#x2F;AgentCgroup AI Agent OS 资源控制]] — 资源维度，与 LangGraph 互补
 
 ]]></content>
   </entry>
